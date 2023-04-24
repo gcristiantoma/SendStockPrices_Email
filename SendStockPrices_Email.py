@@ -2,10 +2,15 @@
 
 # -- Sheet --
 
+import smtplib
 import pandas as pd
 from yahoo_fin import stock_info as si
 from datetime import datetime, timedelta
 import os
+import mysql.connector
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
 
 def get_stock_prices(stocks, days):
     end_date = datetime.today().date()
@@ -24,13 +29,35 @@ def get_stock_prices(stocks, days):
 
     # Convert the DataFrame to a string with formatted cells
     stock_prices_str = stock_prices.to_string(index=True, header=True, formatters={col: formatter for col in stock_prices.columns})
+    
+    # Add the stock prices to the MySQL database
+    cnx = mysql.connector.connect(
+        host=os.environ['MYSQL_HOST'],
+        user=os.environ['MYSQL_USER'],
+        password=os.environ['MYSQL_PASSWORD'],
+        database=os.environ['MYSQL_DB']
+    )
+    cursor = cnx.cursor()
+    for symbol in stock_prices.columns:
+        for i, row in stock_prices.iterrows():
+            date = i.date()
+            open_price = row[symbol]
+            high_price = row[symbol]
+            low_price = row[symbol]
+            close_price = row[symbol]
+            adj_close_price = row[symbol]
+            volume = 0
+            query = "INSERT INTO stock_data (Date, Open, High, Low, Close, Adj_Close, Volume, Symbol) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+            values = (date, open_price, high_price, low_price, close_price, adj_close_price, volume, symbol)
+            cursor.execute(query, values)
+    cnx.commit()
+    cursor.close()
+    cnx.close()
+    
     return stock_prices_str
 
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
-def send_email(recipient,subject,body):
+def send_email(recipient, subject, body):
     # Define the sender and recipient email addresses
     sender = os.environ["email"]  
     # Create the message
@@ -64,7 +91,6 @@ days = 5
 
 stock_prices = get_stock_prices(blue_chips, days)
 print(stock_prices)
-
 
 send_email(os.environ["email"],"Stock Prices",stock_prices)
 
